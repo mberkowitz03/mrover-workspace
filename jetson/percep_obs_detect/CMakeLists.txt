@@ -13,12 +13,15 @@ add_compile_options(-DVIEWER_ONLY)
 find_package(GLUT REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(OpenGL REQUIRED)
+find_package(OpenCV REQUIRED)
 include_directories(SYSTEM ${GLEW_INCLUDE_DIRS})
 include_directories(SYSTEM ${GLUT_INCLUDE_PATH})
 include_directories(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories(SYSTEM ${OpenCV_INCLUDE_DIRS})
 link_directories(${GLEW_LIBRARY_DIRS})
 link_directories(${GLUT_LIBRARY_DIRS})
 link_directories(${OpenGL_LIBRARY_DIRS})
+
 add_executable (viewer src/viewer.cpp)
 set_target_properties(viewer PROPERTIES LINKER_LANGUAGE CXX)
 
@@ -39,12 +42,14 @@ find_package(ZED 3 REQUIRED)
 find_package(GLUT REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(OpenGL REQUIRED)
+find_package(OpenCV REQUIRED)
 
 
 include_directories(SYSTEM ${ZED_INCLUDE_DIRS})
 include_directories(SYSTEM ${GLEW_INCLUDE_DIRS})
 include_directories(SYSTEM ${GLUT_INCLUDE_PATH})
 include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
+include_directories(SYSTEM ${OpenCV_INCLUDE_DIRS})
 include_directories(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/include)
 include_directories(/usr/local/cuda-10.0/samples/common/inc)
 include_directories($ENV{HOME}/.mrover/build_env/include)
@@ -71,7 +76,8 @@ target_link_libraries(jetson_percep_obs_detect
                         ${ZED_LIBS}
                         ${OPENGL_LIBRARIES}
                         ${GLUT_LIBRARY}
-                        ${GLEW_LIBRARIES})
+                        ${GLEW_LIBRARIES}
+                        ${OpenCV_LIBS})
 if(NO_JARVIS)
 else()
 target_link_libraries (jetson_percep_obs_detect lcm)
