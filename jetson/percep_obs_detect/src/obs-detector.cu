@@ -198,7 +198,8 @@ void ObsDetector::update() {
 
         cv::Mat cvZedDepth = slMat2cvMat(zedDepth);
         cv::Mat cvZedImage = slMat2cvMat(zedImage);
-        tags = findARTags(zedImage, zedDepth, rgb);
+        tags = findARTags(cvZedImage, cvZedDepth, rgb); 
+        //here brings error "a reference of type "cv::Mat &" (not const-qualified) cannot be initialized with a value of type "sl::Mat" twice
     } else if(source == DataSource::FILESYSTEM) {
         pc = fileReader.readCloudGPU(viewer.frame);
         if (viewer.frame == 1) viewer.setTarget();
