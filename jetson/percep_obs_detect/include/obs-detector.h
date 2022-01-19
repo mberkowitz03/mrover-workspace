@@ -15,6 +15,8 @@
 #include <float.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <opencv2/opencv.hpp>
+#include <opencv2/aruco.hpp>
 
 #ifndef NO_JARVIS
 #include <lcm/lcm-cpp.hpp>
@@ -58,6 +60,28 @@ class ObsDetector {
 
         //Destructor 
         ~ObsDetector();
+
+        struct Tag {
+        cv::Point2f loc;
+        int id;
+        };
+
+        /**
+         * \brief Takes corners of a tag and returns the center coordinate
+         */
+        cv::Point2f getAverageTagCoordinateFromCorners(const vector<cv::Point2f> &corners);
+
+        /**
+         * \brief Finds AR tags given an image from the ZED camera
+         * 
+         */
+        pair<Tag, Tag> findARTags(cv::Mat &src, cv::Mat &depth_src, cv::Mat &rgb);
+
+        /**
+         * \brief Converts sl::Mat to cv::Mat
+         * 
+         */
+        cv::Mat slMat2cvMat(sl::Mat& input);
 
         /**
          * \brief Grabs the next frame from either file or zed and performs an obstacle detection
@@ -142,6 +166,12 @@ class ObsDetector {
         float leftBearing;
         float rightBearing;
         float distance;
+
+        //AR Tag detection
+        std::vector<int> ids;
+        std::vector<std::vector<cv::Point2f>> corners;
+        cv::Ptr<cv::aruco::Dictionary> alvarDict;
+        cv::Ptr<cv::aruco::DetectorParameters> alvarParams;
 
         //Other
         int frameNum = 0;

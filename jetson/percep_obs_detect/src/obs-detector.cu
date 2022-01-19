@@ -62,8 +62,120 @@ void ObsDetector::setupParamaters(std::string parameterFile) {
     voxelGrid = new VoxelGrid(10);
     ece = new EuclideanClusterExtractor(300, 30, 0, cloud_res.area(), 9); 
     findClear = new FindClearPath();
+
+    //set AR Tag params
+    cv::FileStorage fsr("percep_obs_detect/src/alvar_dict.yml", cv::FileStorage::READ);
+        if (!fsr.isOpened()) {  //throw error if dictionary file does not exist
+            std::cerr << "ERR: \"alvar_dict.yml\" does not exist! Create it before running main\n";
+            throw cv::Exception();
+        }
+
+        // read dictionary from file
+        int mSize, mCBits;
+        cv::Mat bits;
+        fsr["MarkerSize"] >> mSize;
+        fsr["MaxCorrectionBits"] >> mCBits;
+        fsr["ByteList"] >> bits;
+        fsr.release();
+        alvarDict = new cv::aruco::Dictionary(bits, mSize, mCBits);
+
+    alvarParams = new cv::aruco::DetectorParameters();
+    alvarParams->markerBorderBits = 2; 
+    alvarParams->doCornerRefinement = 0;
+    alvarParams->polygonalApproxAccuracyRate = 0.08;
 }
-        
+
+    cv::Point2f ObsDetector::getAverageTagCoordinateFromCorners(const vector<cv::Point2f> &corners) {  //gets coordinate of center of tag
+    // RETURN:
+    // Point2f object containing the average location of the 4 corners
+    // of the passed-in tag
+    cv::Point2f avgCoord;
+    for (auto &corner : corners) {
+        avgCoord.x += corner.x;
+        avgCoord.y += corner.y;
+    }
+    avgCoord.x /= corners.size();
+    avgCoord.y /= corners.size();
+    return avgCoord;
+}
+
+pair<ObsDetector::Tag, ObsDetector::Tag> ObsDetector::findARTags(cv::Mat &src, cv::Mat &depth_src, cv::Mat &rgb) {  //detects AR tags in source Mat and outputs Tag objects for use in LCM
+    // RETURN:
+    // pair of target objects- each object has an x and y for the center,
+    // and the tag ID number return them such that the "leftmost" (x
+    // coordinate) tag is at index 0
+    cv::cvtColor(src, rgb, cv::COLOR_RGBA2RGB);
+    // clear ids and corners vectors for each detection
+    ids.clear();
+    corners.clear();
+
+    // Find tags
+    cv::aruco::detectMarkers(rgb, alvarDict, corners, ids, alvarParams);
+
+    // create Tag objects for the detected tags and return them
+    pair<ObsDetector::Tag, ObsDetector::Tag> discoveredTags;
+    if (ids.size() == 0) {
+        // no tags found, return invalid objects with tag set to -1
+        discoveredTags.first.id = -1;
+        discoveredTags.first.loc = cv::Point2f();
+        discoveredTags.second.id = -1;
+        discoveredTags.second.loc = cv::Point2f();
+
+    } else if (ids.size() == 1) {  // exactly one tag found
+        discoveredTags.first.id = ids[0];
+        discoveredTags.first.loc = getAverageTagCoordinateFromCorners(corners[0]);
+        // set second tag to invalid object with tag as -1
+        discoveredTags.second.id = -1;
+        discoveredTags.second.loc = cv::Point2f();
+    } else if (ids.size() == 2) {  // exactly two tags found
+        ObsDetector::Tag t0, t1;
+        t0.id = ids[0];
+        t0.loc = getAverageTagCoordinateFromCorners(corners[0]);
+        t1.id = ids[1];
+        t1.loc = getAverageTagCoordinateFromCorners(corners[1]);
+        if (t0.loc.x < t1.loc.x) {  //if tag 0 is left of tag 1, put t0 first
+            discoveredTags.first = t0;
+            discoveredTags.second = t1;
+        } else {  //tag 1 is left of tag 0, put t1 first
+            discoveredTags.first = t1;
+            discoveredTags.second = t0;
+        }
+    } else {  // detected >=3 tags
+        // return leftmost and rightsmost detected tags to account for potentially seeing 2 of each tag on a post
+        ObsDetector::Tag t0, t1;
+        t0.id = ids[0];
+        t0.loc = getAverageTagCoordinateFromCorners(corners[0]);
+        t1.id = ids[ids.size() - 1];
+        t1.loc = getAverageTagCoordinateFromCorners(corners[ids.size() - 1]);
+        if (t0.loc.x < t1.loc.x) {  //if tag 0 is left of tag 1, put t0 first
+            discoveredTags.first = t0;
+            discoveredTags.second = t1;
+        } else {  //tag 1 is left of tag 0, put t1 first
+            discoveredTags.first = t1;
+            discoveredTags.second = t0;
+        }
+    }
+    return discoveredTags;
+} 
+
+//check camera.cpp and camera.hpp in main to see if this is necessary
+cv::Mat ObsDetector::slMat2cvMat(sl::Mat& input) {
+    // Since cv::Mat data requires a uchar* pointer, we get the uchar1 pointer from sl::Mat (getPtr<T>())
+    // cv::Mat and sl::Mat will share a single memory structure
+    int cvType = -1;
+    switch (input.getDataType()) {
+        case sl::MAT_TYPE::F32_C1: cvType = CV_32FC1; break;
+        case sl::MAT_TYPE::F32_C2: cvType = CV_32FC2; break;
+        case sl::MAT_TYPE::F32_C3: cvType = CV_32FC3; break;
+        case sl::MAT_TYPE::F32_C4: cvType = CV_32FC4; break;
+        case sl::MAT_TYPE::U8_C1: cvType = CV_8UC1; break;
+        case sl::MAT_TYPE::U8_C2: cvType = CV_8UC2; break;
+        case sl::MAT_TYPE::U8_C3: cvType = CV_8UC3; break;
+        case sl::MAT_TYPE::U8_C4: cvType = CV_8UC4; break;
+        default: break;
+    }
+    return cv::Mat(input.getHeight(), input.getWidth(), cvType, input.getPtr<sl::uchar1>(sl::MEM::CPU), input.getStepBytes(sl::MEM::CPU));
+}    
 
 void ObsDetector::update() {
     GPU_Cloud pc; 
@@ -72,8 +184,20 @@ void ObsDetector::update() {
     if(source == DataSource::ZED) {
         zed.grab();
         zed.retrieveMeasure(frame, sl::MEASURE::XYZRGBA, sl::MEM::GPU, cloud_res); 
+
+        sl::Mat zedDepth(sl::Resolution::getResolution(sl::RESOLUTION::VGA), sl::MAT_TYPE::F32_C1, sl::MEM::CPU);
+        zed.retrieveMeasure(zedDepth, sl::MEASURE::DEPTH);
+
+        sl::Mat zedImage(sl::Resolution::getResolution(sl::RESOLUTION::VGA), sl::MAT_TYPE::U8_C4, sl::MEM::CPU);
+        zed.retrieveImage(zedImage, sl::VIEW::LEFT);
+
         getRawCloud(pc, frame);
-        
+
+        cv::Mat rgb;
+
+        cv::Mat cvZedDepth = slMat2cvMat(zedDepth);
+        cv::Mat cvZedImage = slMat2cvMat(zedImage);
+        tags = findARTags(zedImage, zedDepth, rgb);
     } else if(source == DataSource::FILESYSTEM) {
         pc = fileReader.readCloudGPU(viewer.frame);
         if (viewer.frame == 1) viewer.setTarget();
