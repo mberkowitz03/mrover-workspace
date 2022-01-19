@@ -180,15 +180,16 @@ cv::Mat ObsDetector::slMat2cvMat(sl::Mat& input) {
 void ObsDetector::update() {
     GPU_Cloud pc; 
     sl::Mat frame(cloud_res, sl::MAT_TYPE::F32_C4, sl::MEM::GPU);
+    pair<ObsDetector::Tag, ObsDetector::Tag> tags;
 
     if(source == DataSource::ZED) {
         zed.grab();
         zed.retrieveMeasure(frame, sl::MEASURE::XYZRGBA, sl::MEM::GPU, cloud_res); 
 
-        sl::Mat zedDepth(sl::Resolution::getResolution(sl::RESOLUTION::VGA), sl::MAT_TYPE::F32_C1, sl::MEM::CPU);
+        sl::Mat zedDepth(640, 480, sl::MAT_TYPE::F32_C1, sl::MEM::CPU);
         zed.retrieveMeasure(zedDepth, sl::MEASURE::DEPTH);
 
-        sl::Mat zedImage(sl::Resolution::getResolution(sl::RESOLUTION::VGA), sl::MAT_TYPE::U8_C4, sl::MEM::CPU);
+        sl::Mat zedImage(640, 480, sl::MAT_TYPE::U8_C4, sl::MEM::CPU);
         zed.retrieveImage(zedImage, sl::VIEW::LEFT);
 
         getRawCloud(pc, frame);
