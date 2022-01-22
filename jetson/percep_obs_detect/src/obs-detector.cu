@@ -64,7 +64,7 @@ void ObsDetector::setupParamaters(std::string parameterFile) {
     findClear = new FindClearPath();
 
     //set AR Tag params
-    cv::FileStorage fsr("alvar_dict.yml", cv::FileStorage::READ);
+    cv::FileStorage fsr("percep_obs_detect/src/alvar_dict.yml", cv::FileStorage::READ);
         if (!fsr.isOpened()) {  //throw error if dictionary file does not exist
             std::cerr << "ERR: \"alvar_dict.yml\" does not exist! Create it before running main\n";
             throw cv::Exception();
@@ -85,7 +85,7 @@ void ObsDetector::setupParamaters(std::string parameterFile) {
     alvarParams->polygonalApproxAccuracyRate = 0.08;
 }
 
-    cv::Point2f ObsDetector::getAverageTagCoordinateFromCorners(const vector<cv::Point2f> &corners) {  //gets coordinate of center of tag
+cv::Point2f ObsDetector::getAverageTagCoordinateFromCorners(const vector<cv::Point2f> &corners) {  //gets coordinate of center of tag
     // RETURN:
     // Point2f object containing the average location of the 4 corners
     // of the passed-in tag
@@ -186,7 +186,7 @@ void ObsDetector::update() {
         zed.grab();
         zed.retrieveMeasure(frame, sl::MEASURE::XYZRGBA, sl::MEM::GPU, cloud_res); 
 
-        sl::Mat zedDepth(640, 480, sl::MAT_TYPE::F32_C1, sl::MEM::CPU);
+        sl::Mat zedDepth(640, 480, sl::MAT_TYPE::F32_C1, sl::MEM::CPU); //CHANGE RESOLUTIONS TO NOT BE HARDCODED
         zed.retrieveMeasure(zedDepth, sl::MEASURE::DEPTH);
 
         sl::Mat zedImage(640, 480, sl::MAT_TYPE::U8_C4, sl::MEM::CPU);
@@ -253,6 +253,53 @@ void ObsDetector::populateMessage(float leftBearing, float rightBearing, float d
     obstacleMessage.distance = distance;
     lcm_.publish("/obstacle", &obstacleMessage);
     #endif
+}
+
+void ObsDetector::publishTags(pair<Tag, Tag> &tags, cv::Mat &depthImg, cv::Mat &rgbImg) {
+    #ifndef JARVIS
+    struct tagPairs {
+        vector<int> id;
+        vector<int> locx;
+        vector<int> locy;
+        vector<int> buffer;
+    }; 
+    tagPairs tags;
+
+    tags.id.push_back(tagPair.first.id);
+    tags.locx.push_back(tagPair.first.loc.x);
+    tags.locy.push_back(tagPair.first.loc.y);
+    tags.id.push_back(tagPair.second.id);
+    tags.locx.push_back(tagPair.second.loc.x);
+    tags.locy.push_back(tagPair.second.loc.y);
+    tags.buffer.push_back(0);
+    tags.buffer.push_back(0);
+
+    for (uint i=0; i<2; i++) {
+        if(tags.id[i] == DEFAULT_VALUE){ //no tag found
+            if(tags.buffer[i] <= BUFFER_ITERATIONS){ //send buffered tag until tag is found
+                ++tags.buffer[i];
+            } else { //if still no tag found, set all stats to -1
+            arTags[i].distance = DEFAULT_VALUE;
+            arTags[i].bearing = DEFAULT_VALUE;
+            arTags[i].id = DEFAULT_VALUE;
+            }
+        } else { //tag found
+            if(!isnan(depthImg.at<float>(tags.locy.at(i), tags.locx.at(i)))) {
+                arTags[i].distance = depthImg.at<float>(tags.locy.at(i), tags.locx.at(i)) / MM_PER_M;
+            }
+            arTags[i].bearing = getAngle((int)tags.locx.at(i), rgbImg.cols);
+            arTags[i].id = tags.id.at(i);
+            tags.buffer[i] = 0;
+        }
+    }
+
+    lcm_.publish("/target_list", &arTagMessage);
+    #endif
+}
+
+double ObsDetector::getAngle(float xPixel, float wPixel){
+    double fieldofView = 110 * PI/180;
+    return atan((xPixel - wPixel/2)/(wPixel/2)* tan(fieldofView/2))* 180.0 /PI;
 }
 
 void ObsDetector::spinViewer() {

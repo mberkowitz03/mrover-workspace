@@ -21,6 +21,8 @@
 #ifndef NO_JARVIS
 #include <lcm/lcm-cpp.hpp>
 #include "rover_msgs/Obstacle.hpp"
+#include "rover_msgs/Target.hpp"
+#include "rover_msgs/TargetList.hpp"
 #endif
 
 // TODO: move as many of these includes to cpp as possible
@@ -44,6 +46,11 @@ enum class OperationMode {DEBUG, SILENT};
  */
 enum ViewerType {NONE, GL};
 
+struct Tag {
+    cv::Point2f loc;
+    int id;
+}
+
 /** 
  * \class ObsDetector
  * \brief class that contains framework, algorithm instances, and state variables to perform obstacle detection
@@ -60,11 +67,6 @@ class ObsDetector {
 
         //Destructor 
         ~ObsDetector();
-
-        struct Tag {
-        cv::Point2f loc;
-        int id;
-        };
 
         /**
          * \brief Takes corners of a tag and returns the center coordinate
@@ -119,6 +121,18 @@ class ObsDetector {
          */
         void populateMessage(float leftBearing, float rightBearing, float distance);
 
+        /**
+         * \brief Publishes the LCM AR tag message
+         * \param tags Pair of tags from findARTags();
+         */
+        void publishTags(pair<Tag, Tag> &tags, cv::Mat &depthImage, cv::Mat &rgbImage);
+
+        /**
+         * \brief Calculate angle from straight ahead
+         * \param xpixel x pixel coordinate of point
+         * \param wpixel w pixel coordinate of point
+         */
+        double getAngle(float xpixel, float wpixel);
 
     private:
 
@@ -131,6 +145,8 @@ class ObsDetector {
         #ifndef NO_JARVIS
         lcm::LCM lcm_;
         rover_msgs::Obstacle obstacleMessage;
+        rover_msgs::TargetList arTagMessage;
+        rover_msgs::Target* arTags = arTagsMessage.targetList;
         #endif
 
         //Data sources
@@ -172,6 +188,9 @@ class ObsDetector {
         std::vector<std::vector<cv::Point2f>> corners;
         cv::Ptr<cv::aruco::Dictionary> alvarDict;
         cv::Ptr<cv::aruco::DetectorParameters> alvarParams;
+        const int DEFAULT_VALUE = -1;
+        const int MM_PER_M = 1000;
+        const int BUFFER_ITERATIONS = 20;
 
         //Other
         int frameNum = 0;
