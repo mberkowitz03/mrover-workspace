@@ -64,7 +64,7 @@ void ObsDetector::setupParamaters(std::string parameterFile) {
     findClear = new FindClearPath();
 
     //set AR Tag params
-    cv::FileStorage fsr("percep_obs_detect/src/alvar_dict.yml", cv::FileStorage::READ);
+    cv::FileStorage fsr("jetson/percep_obs_detect/src/alvar_dict.yml", cv::FileStorage::READ);
         if (!fsr.isOpened()) {  //throw error if dictionary file does not exist
             std::cerr << "ERR: \"alvar_dict.yml\" does not exist! Create it before running main\n";
             throw cv::Exception();
