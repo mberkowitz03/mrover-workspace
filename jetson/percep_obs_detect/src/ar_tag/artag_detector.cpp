@@ -145,9 +145,12 @@ pair<Tag, Tag> TagDetector::findARTags(Mat& src, Mat& depth_src, Mat& rgb) {  //
     return discoveredTags;
 }
 
-double TagDetector::getAngle(float xPixel, float wPixel) {
-    double fieldofView = 110 * PI / 180;
-    return atan((xPixel - wPixel / 2) / (wPixel / 2) * tan(fieldofView / 2)) * 180.0 / PI;
+double TagDetector::getAngle(float uPixel, float vPixel, float wPixel) {
+    double depth = 
+    double worldX = (depth / focalx) * (uPixel - cx);
+
+    //double fieldofView = 110 * PI / 180;
+    //return atan((xPixel - wPixel / 2) / (wPixel / 2) * tan(fieldofView / 2)) * 180.0 / PI;
 }
 
 #ifdef WITH_JARVIS
@@ -182,7 +185,7 @@ void TagDetector::updateDetectedTagInfo(rover_msgs::Target *arTags, pair<Tag, Ta
     if(!isnan(depth_img.at<float>(tags.locy.at(i), tags.locx.at(i)))) {
         arTags[i].distance = depth_img.at<float>(tags.locy.at(i), tags.locx.at(i)) / MM_PER_M;
     }
-        arTags[i].bearing = getAngle((int)tags.locx.at(i), src.cols);
+        arTags[i].bearing = getAngle((int)tags.locx.at(i), (int)tags.locy.at(i), depth_img., src.cols);
         arTags[i].id = tags.id.at(i);
         tags.buffer[i] = 0;
    }
